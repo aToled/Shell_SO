@@ -1,0 +1,2 @@
+# Shell_SO
+Tarea de 501251-1 SISTEMAS OPERATIVOS
