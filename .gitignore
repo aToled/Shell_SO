@@ -53,3 +53,11 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Ignorar binarios de prueba locales
+prueba_stat
+prueba_status
+prueba_visual
+
+# Ignorar archivos temporales de swap
+*.swp
