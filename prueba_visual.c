@@ -1,16 +1,15 @@
 #include <stdio.h>
 #include <unistd.h> // Para getpid(), sleep() y sysconf()
 #include "pmon.h"
-#include <signal.h> // ¡Nueva librería para señales!
+#include <signal.h>
 
 
-// 1. VARIABLES GLOBALES
 // Las sacamos del main para que el manejador pueda acceder a ellas
 Proceso proceso_real;
 int mi_pid;
 long hertz;
 
-// 2. EL MANEJADOR DE LA ALARMA
+//el manejador de la alarma
 // Esta función se ejecuta sola cada vez que pasa 1 segundo
 void manejador_alarma(int sig) {
     (void)sig;
@@ -27,22 +26,17 @@ void manejador_alarma(int sig) {
     // Imprimimos la tabla
     mostrar_monitor(proceso_real);
 
-    // ¡Importante! Volvemos a programar la alarma para el próximo segundo
+    //se vuelve a programar la alarma para el próximo segundo
     alarm(1);
 }
-// EL MANEJADOR DE SALIDA (Ctrl+C)
+//el manejador de salida (Ctrl+C)
 void manejador_salida(int sig) {
-    (void)sig; // El mismo truco para que el compilador no se queje
-    
-    // Limpiamos la pantalla por última vez antes de irnos
+    (void)sig; 
     printf("\033[H\033[J");
     printf("Saliendo del monitor de procesos...\n");
-    
-    // Terminamos el programa de forma exitosa (0)
     _exit(0); 
 }
 
-// 3. EL MAIN (El Jefe)
 int main() {
     mi_pid = getpid();
     hertz = sysconf(_SC_CLK_TCK);
@@ -52,17 +46,14 @@ int main() {
     extraer_datos_stat(mi_pid, &proceso_real);
     proceso_real.memoria_rss = extraer_memoria_status(mi_pid);
     
-    // Le avisamos al Sistema Operativo: 
-    // "Cuando suene SIGALRM, ejecuta la función manejador_alarma"
+    //cuando suene SIGALRM, ejecuta la funcion manejador_alarma
     signal(SIGALRM, manejador_alarma);
-    signal(SIGINT, manejador_salida); // <--- Atrapamos el Ctrl+C
+    signal(SIGINT, manejador_salida); //se atrapa el Ctrl+C
 
-    // Activamos la primera alarma para que suene en 1 segundo
+    //se activa la primera alarma 
     alarm(1);
 
-    // En lugar de usar sleep() que congela todo, usamos un ciclo infinito vacío.
-    // pause() simplemente manda a dormir al programa hasta que llegue CUALQUIER señal.
-    // Esto gasta 0% de CPU mientras espera.
+    // pause() manda a dormir al programa hasta que llegue cualquier señal
     while (1) {
         pause(); 
     }

@@ -1,7 +1,7 @@
 #include "pmon.h"
 #include <stdio.h>
-#include <unistd.h> // necesario para get pid()
-// El main de prueba status
+#include <unistd.h> // get pid()
+
 int main() {
     // getpid() obtiene el PID de este mismo programa en ejecución
     int mi_propio_pid = getpid();

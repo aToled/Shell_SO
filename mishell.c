@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include "pmon.h"
 
 int main(void){
     char *line = NULL;
@@ -39,6 +40,23 @@ int main(void){
 
         if ( num_cmds== 0) {
             continue; 
+        }
+        char cmd_copia[256];
+        strncpy(cmd_copia, cmds[0], sizeof(cmd_copia) - 1);
+        cmd_copia[255] = '\0';
+        
+        char *primer_token = strtok(cmd_copia, " \t\n");
+
+        if (primer_token != NULL && strcmp(primer_token, "pmon") == 0) {
+            int segundos = 2; // Valor por defecto
+            char *segundo_token = strtok(NULL, " \t\n");
+            
+            if (segundo_token != NULL) {
+                segundos = atoi(segundo_token);
+            }
+            
+            iniciar_monitor(segundos);
+            continue;
         }
         
         int num_pipes = num_cmds - 1;
