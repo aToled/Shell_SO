@@ -116,17 +116,40 @@ unsigned long extraer_memoria_status(int pid) {
 
     return memoria_rss;
 }
+//funcion para ordenar procesos por %CPU de mayor a menor
+int comparar_cpu(const void *a, const void *b) {
+    Proceso *p1 = (Proceso *)a;
+    Proceso *p2 = (Proceso *)b;
+    
+    if (p1->porcentaje_cpu < p2->porcentaje_cpu) return 1;
+    if (p1->porcentaje_cpu > p2->porcentaje_cpu) return -1;
+    return 0;
+}
 
-void mostrar_monitor(Proceso proceso_actual) {
+void mostrar_monitor(Proceso *lista_procesos, int total_procesos) {
+    //ordenar el arreglo usando qsort y nuestra función comparadora
+    qsort(lista_procesos, total_procesos, sizeof(Proceso), comparar_cpu);
     // Limpiamos la pantalla
     printf("\033[H\033[J");
     printf("%-10s %-10s %-15s %-15s\n", "PID", "ESTADO", "%CPU", "MEMORIA(KB)");
     printf("----------------------------------------------------\n");
-    printf("%-10d %-10s %-15.2f %-15lu\n", 
-           proceso_actual.pid, 
-           proceso_actual.estado, 
-           proceso_actual.porcentaje_cpu, 
-           proceso_actual.memoria_rss);
+    for (int i = 0; i < total_procesos; i++) {
+        //resaltar el proceso con mayor uso
+        if (i == 0 && total_procesos > 0) {
+            printf("\033[1;36m"); 
+        }
+        
+        printf("%-10d %-10s %-15.2f %-15lu\n", 
+               lista_procesos[i].pid, 
+               lista_procesos[i].estado, 
+               lista_procesos[i].porcentaje_cpu, 
+               lista_procesos[i].memoria_rss);
+               
+        //apagar el color después de imprimir la primera fila
+        if (i == 0 && total_procesos > 0) {
+            printf("\033[0m");
+        }
+    }
 }
 void iniciar_monitor(int segundos) {
     mi_pid = getpid(); // Por ahora monitoreamos la shell misma como prueba
@@ -179,7 +202,7 @@ void iniciar_monitor(int segundos) {
             proceso_real.utime_anterior = foto_nueva.utime_anterior;
             proceso_real.stime_anterior = foto_nueva.stime_anterior;
 
-            mostrar_monitor(proceso_real);
+            mostrar_monitor(&proceso_real, 1);
 
             //se reprograma la alarma para el siguiente ciclo
             alarm(intervalo_segundos);

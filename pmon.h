@@ -15,7 +15,7 @@ typedef struct {
     float porcentaje_cpu;
 } Proceso;
 
-void mostrar_monitor(Proceso proceso_actual);
+void mostrar_monitor(Proceso *lista_procesos, int total_procesos);
 
 // Extrae el estado y los tiempos de CPU (utime, stime) desde /proc/[pid]/stat
 void extraer_datos_stat(int pid, Proceso *p);
