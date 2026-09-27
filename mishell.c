@@ -5,6 +5,9 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+
+#include "comandos_internos.h"
+#include "jobs.h"
 #include "pmon.h"
 
 int main(void){
@@ -45,20 +48,40 @@ int main(void){
         strncpy(cmd_copia, cmds[0], sizeof(cmd_copia) - 1);
         cmd_copia[255] = '\0';
         
-        char *primer_token = strtok(cmd_copia, " \t\n");
+        /* Tokenizamos completo para poder revisar los comandos internos con sus argumentos (cd [dir], exit [n]) 
+        ademas del primer token, esto solo aplica cuando la linea no es una pipe (num_cmds == 1). */
+        char *args_comandos_internos[64];
+        int arg_comando_interno = 0;
 
-        if (primer_token != NULL && strcmp(primer_token, "pmon") == 0) {
-            int segundos = 2; // Valor por defecto
-            char *segundo_token = strtok(NULL, " \t\n");
-            
-            if (segundo_token != NULL) {
-                segundos = atoi(segundo_token);
+        {
+            char *tok = strtok(cmd_copia, " \t\n");
+            while (tok != NULL && arg_comando_interno < 63) {
+                args_comandos_internos[arg_comando_interno++] = tok;
+                tok = strtok(NULL, " \t\n");
             }
-            
+            args_comandos_internos[arg_comando_interno] = NULL;
+        }
+
+        if (arg_comando_interno == 0) {
+            continue;
+        }
+
+        if (num_cmds == 1 && strcmp(args_comandos_internos[0], "pmon") == 0) {
+            int segundos = 2; // Valor por defecto
+
+            if (arg_comando_interno >= 2) {
+                segundos = atoi(args_comandos_internos[1]);
+            }
+
             iniciar_monitor(segundos);
             continue;
         }
-        
+
+        if (num_cmds == 1 && es_comando_interno(args_comandos_internos[0])) {
+            ejecutar_comando_interno(args_comandos_internos, arg_comando_interno);     //"exit" termina aqui y no retorna
+            continue;
+        }
+
         int num_pipes = num_cmds - 1;
         int pipefds[2 * num_pipes];
 

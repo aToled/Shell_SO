@@ -35,12 +35,14 @@
 *.i*86
 *.x86_64
 *.hex
+mishell
 
 # Debug files
 *.dSYM/
 *.su
 *.idb
 *.pdb
+*.txt
 
 # Kernel Module Compile Results
 *.mod*
@@ -61,3 +63,4 @@ prueba_visual
 
 # Ignorar archivos temporales de swap
 *.swp
+*Zone.Identifier
