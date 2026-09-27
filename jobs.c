@@ -22,7 +22,7 @@ int agregar_job(pid_t pid, const char *comando){
     strncpy(j->comando, comando, sizeof(j->comando) - 1);
     j->comando[sizeof(j->comando) - 1] = '\0';
     j->activo = 1;
- 
+    j->notificar = 0;
     return j->job_id;
 }
 
@@ -30,6 +30,25 @@ void listar_jobs(void) {
     for (int i = 0; i < cantidad_jobs; i++) {
         if (jobs[i].activo) {
             printf("[%d] Ejecutando %s\n", jobs[i].job_id, jobs[i].comando);
+        }
+    }
+}
+
+void marcar_terminado(pid_t pid){
+    for (int i = 0; i < cantidad_jobs; i++) {
+        if (jobs[i].pid == pid && jobs[i].activo) {
+            jobs[i].activo = 0;
+            jobs[i].notificar = 1;
+            return;
+        }
+    }
+}
+ 
+void avisar_jobs_terminados(void) {
+    for (int i = 0; i < cantidad_jobs; i++) {
+        if (!jobs[i].activo && jobs[i].notificar) {
+            printf("[%d]+ Done %s\n", jobs[i].job_id, jobs[i].comando);
+            jobs[i].notificar = 0;
         }
     }
 }
