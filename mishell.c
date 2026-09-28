@@ -17,13 +17,14 @@ int main(void){
     size_t len = 0;
     char cwd[1024];
 
-    
     instalar_manejador_sigchld();
     ignorar_sigint_shell();
+
     while(1){
+        // Notifica al usuario sobre los trabajos en background que terminaron
         avisar_jobs_terminados();
 
-       // mostrar direccion
+       // Muestra el directorio actual en el prompt
         if (getcwd(cwd, sizeof(cwd)) != NULL) {
             printf("miShell:%s$ ", cwd);
             fflush(stdout);
@@ -31,7 +32,7 @@ int main(void){
             perror("getcwd() error");
             exit(EXIT_FAILURE);
         }
-
+        // Lee la línea ingresada por el usuario
         if (getline(&line, &len, stdin) == -1) {
             printf("\n");
             break;
@@ -63,6 +64,7 @@ int main(void){
             continue;
         }
 
+        // Divide la línea en comandos separados por tuberías ('|')
         char *cmds[64];
         int num_cmds = 0;
         char *cmd_token = strtok(line, "|");
@@ -111,11 +113,13 @@ int main(void){
             continue;
         }
 
+        // Ejecuta comandos internos directamente en el padre (cd, exit, jobs)
         if (num_cmds == 1 && es_comando_interno(args_comandos_internos[0])) {
             ejecutar_comando_interno(args_comandos_internos, arg_comando_interno);     //"exit" termina aqui y no retorna
             continue;
         }
 
+        // Crea las N-1 tuberías necesarias para conectar los N comandos
         int num_pipes = num_cmds - 1;
         int pipefds[2 * num_pipes];
 
@@ -127,7 +131,7 @@ int main(void){
         }
 
         pid_t pids[64];
-
+        // Bucle de creación de procesos hijos para la tubería
         for (int i = 0; i < num_cmds; i++) {
             pids[i] = fork();
 
@@ -157,6 +161,7 @@ int main(void){
                 char *outfile = NULL;
                 int append = 0;
 
+                // Parsea argumentos y detecta operadores de redirección (<, >, >>)
                 char *token = strtok(cmds[i], " \t\n");
                 while (token != NULL && arg_count < 63) {
                     if (strcmp(token, "<") == 0) {
@@ -208,7 +213,8 @@ int main(void){
                 exit(EXIT_FAILURE);
             }
         }
-
+        
+        // Cierra los descriptores de pipes en el padre para evitar deadlocks
         for (int i = 0; i < 2 * num_pipes; i++) {
             close(pipefds[i]);
         }
