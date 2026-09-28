@@ -2,6 +2,7 @@
 #define JOBS_H
 
 #include <sys/types.h>
+#include "pmon.h"
 
 /*
 La tabla de procesos background ejecutados por la shell (R5)
@@ -33,4 +34,5 @@ Imprime una notificacion "Done" para cada job recien terminado sin notificar, y 
 */
 void avisar_jobs_terminados(void);
 
+int extraer_jobs_para_pmon(Proceso *lista_pmon);
 #endif

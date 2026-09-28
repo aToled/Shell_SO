@@ -1,4 +1,3 @@
-
 #include "pmon.h"
 #include <stdio.h>
 #include <stdlib.h> //strtoul
@@ -6,11 +5,16 @@
 #include <unistd.h> // get pid() y sysconf
 #include <signal.h> // sigaction y sig_atomic_t
 
-
-Proceso proceso_real;
-int mi_pid;
-long hertz;
-int intervalo_segundos = 2;
+const char* traducir_estado(char estado_letra) {
+    switch(estado_letra) {
+        case 'R': return "ejecutando";
+        case 'S': return "durmiendo";
+        case 'Z': return "zombie";
+        case 'T': return "detenido";
+        case 'D': return "esperando";
+        default:  return "desconocido";
+    }
+}
 
 //banderas atomicas
 volatile sig_atomic_t actualizar_pantalla = 1; //1 para imprimir inmediatamente
@@ -27,9 +31,9 @@ void manejador_salida(int sig) {
     salir_monitor = 1;
 }
 //Leer /proc/[pid]/stat (El estado y el tiempo)
-void extraer_datos_stat(int pid, Proceso *p) {
+int extraer_datos_stat(int pid, Proceso *p, unsigned long *utime_nuevo, unsigned long *stime_nuevo) {
     char ruta[256];
-    
+
     //armamos la dirección de texto
     // Esto junta el número del PID dentro de la ruta para que quede, por ejemplo, "/proc/4821/stat"
     sprintf(ruta, "/proc/%d/stat", pid);
@@ -37,13 +41,11 @@ void extraer_datos_stat(int pid, Proceso *p) {
     //abrimos el archivo en modo lectura
     FILE *archivo = fopen(ruta, "r");
     if (archivo == NULL) {
-        printf("No se pudo abrir el proceso %d (quizás ya terminó)\n", pid);
-        return;
+        p->activo = 0; //el proceso terminó, lo marcamos para no dibujarlo
+        return 0;
     }
 
     char temporal[256];
-    char estado;
-    unsigned long utime = 0, stime = 0;
 
     //ciclo con contador
     //Todo el contenido de este archivo está escrito en una sola línea, con valores separados simplemente por espacios.
@@ -58,24 +60,20 @@ void extraer_datos_stat(int pid, Proceso *p) {
         //se filtra por la posición
         if (i == 3) {
             // Posición 3: Estado del proceso (R, S, Z, T)
-            estado = temporal[0]; // Solo tomamos la primera letra
+            p->estado[0] = temporal[0];
+            p->estado[1] = '\0';
         } 
         else if (i == 14) {
             // Posición 14: Tiempo de CPU en modo usuario (utime)
-            utime = strtoul(temporal, NULL, 10); // Convierte el texto a un número largo
+            *utime_nuevo = strtoul(temporal, NULL, 10); // Convierte el texto a un número largo
         } 
         else if (i == 15) {
             // Posición 15: Tiempo de CPU en modo sistema (stime)
-            stime = strtoul(temporal, NULL, 10);
+            *stime_nuevo = strtoul(temporal, NULL, 10);
         }
     }
     fclose(archivo);
-
-    // Guardamos el estado
-    p->estado[0] = estado;
-    p->estado[1] = '\0'; 
-    p->utime_anterior = utime;
-    p->stime_anterior = stime;
+    return 1;
 }
 
 // leer /proc/[pid]/status(La memoria)
@@ -121,6 +119,10 @@ int comparar_cpu(const void *a, const void *b) {
     Proceso *p1 = (Proceso *)a;
     Proceso *p2 = (Proceso *)b;
     
+    // Validaciones para empujar procesos inactivos al fondo
+    if (!p1->activo && p2->activo) return 1; 
+    if (p1->activo && !p2->activo) return -1;
+
     if (p1->porcentaje_cpu < p2->porcentaje_cpu) return 1;
     if (p1->porcentaje_cpu > p2->porcentaje_cpu) return -1;
     return 0;
@@ -129,19 +131,28 @@ int comparar_cpu(const void *a, const void *b) {
 void mostrar_monitor(Proceso *lista_procesos, int total_procesos) {
     //ordenar el arreglo usando qsort y nuestra función comparadora
     qsort(lista_procesos, total_procesos, sizeof(Proceso), comparar_cpu);
+
     // Limpiamos la pantalla
     printf("\033[H\033[J");
-    printf("%-10s %-10s %-15s %-15s\n", "PID", "ESTADO", "%CPU", "MEMORIA(KB)");
-    printf("----------------------------------------------------\n");
+    
+    // CORRECCIÓN: Cabecera con 5 columnas (incluye COMANDO)
+    printf("%-10s %-20s %-10s %-15s %-15s\n", "PID", "COMANDO", "ESTADO", "%CPU", "MEMORIA(KB)");
+    printf("------------------------------------------------------------------------\n");
+    
     for (int i = 0; i < total_procesos; i++) {
+        // CORRECCIÓN: Si el proceso ya terminó, no se dibuja en la tabla
+        if (!lista_procesos[i].activo) continue; 
+
         //resaltar el proceso con mayor uso
         if (i == 0 && total_procesos > 0) {
             printf("\033[1;36m"); 
         }
         
-        printf("%-10d %-10s %-15.2f %-15lu\n", 
+        // CORRECCIÓN: Imprimir los 5 datos, incluyendo lista_procesos[i].comando
+        printf("%-10d %-20s %-10s %-15.2f %-15lu\n", 
                lista_procesos[i].pid, 
-               lista_procesos[i].estado, 
+               lista_procesos[i].comando,
+               traducir_estado(lista_procesos[i].estado[0]),
                lista_procesos[i].porcentaje_cpu, 
                lista_procesos[i].memoria_rss);
                
@@ -151,67 +162,69 @@ void mostrar_monitor(Proceso *lista_procesos, int total_procesos) {
         }
     }
 }
-void iniciar_monitor(int segundos) {
-    mi_pid = getpid(); // Por ahora monitoreamos la shell misma como prueba
-    hertz = sysconf(_SC_CLK_TCK);
-    proceso_real.pid = mi_pid;
-    
-    // Si el usuario pasa un argumento válido, lo usamos. Si no, queda en 2.
-    if (segundos > 0) {
-        intervalo_segundos = segundos;
-    }
+void iniciar_monitor(int segundos,Proceso *lista_procesos, int total_procesos) {
+    long hertz = sysconf(_SC_CLK_TCK);
+    int intervalo = (segundos > 0) ? segundos : 2;
 
-    //Configurar sigaction
-    struct sigaction sa_alarma;
+    struct sigaction sa_alarma, sa_salida, sa_ign;
+
     sa_alarma.sa_handler = manejador_alarma;
     sa_alarma.sa_flags = SA_RESTART;
     sigemptyset(&sa_alarma.sa_mask);
     sigaction(SIGALRM, &sa_alarma, NULL);
 
-    struct sigaction sa_salida;
     sa_salida.sa_handler = manejador_salida;
     sa_salida.sa_flags = 0; 
     sigemptyset(&sa_salida.sa_mask);
     sigaction(SIGINT, &sa_salida, NULL);
 
-    // Reiniciar banderas por si el usuario entra a pmon varias veces
     actualizar_pantalla = 1;
     salir_monitor = 0;
 
-    // Extraer datos iniciales para tener un punto de comparación en el primer cálculo
-    extraer_datos_stat(mi_pid, &proceso_real);
+    // Inicializar lecturas base para todos los procesos recibidos
+    for (int i = 0; i < total_procesos; i++) {
+        lista_procesos[i].activo = 1;
+        extraer_datos_stat(lista_procesos[i].pid, &lista_procesos[i], 
+                           &lista_procesos[i].utime_anterior, 
+                           &lista_procesos[i].stime_anterior);
+    }
 
-    //El ciclo principal exigido
     while (!salir_monitor) {
-        
         if (actualizar_pantalla) {
             actualizar_pantalla = 0; 
-            Proceso foto_nueva;
-            extraer_datos_stat(mi_pid, &foto_nueva);
-            proceso_real.memoria_rss = extraer_memoria_status(mi_pid);
-            proceso_real.estado[0] = foto_nueva.estado[0];
 
-            // Cálculo matemático real del %CPU
-            unsigned long delta_utime = foto_nueva.utime_anterior - proceso_real.utime_anterior;
-            unsigned long delta_stime = foto_nueva.stime_anterior - proceso_real.stime_anterior;
-            
-            // Tiempo gastado en CPU / tiempo real transcurrido * 100
-            proceso_real.porcentaje_cpu = (((delta_utime + delta_stime) / (float)hertz) / intervalo_segundos) * 100.0;
+            for (int i = 0; i < total_procesos; i++) {
+                if (!lista_procesos[i].activo) continue;
 
-            // Actualizamos el historial para el siguiente segundo
-            proceso_real.utime_anterior = foto_nueva.utime_anterior;
-            proceso_real.stime_anterior = foto_nueva.stime_anterior;
+                unsigned long utime_nuevo = 0, stime_nuevo = 0;
+                
+                // Extrae datos. Si retorna 1, el proceso sigue vivo y calculamos el %CPU
+                if (extraer_datos_stat(lista_procesos[i].pid, &lista_procesos[i], &utime_nuevo, &stime_nuevo)) {
+                    lista_procesos[i].memoria_rss = extraer_memoria_status(lista_procesos[i].pid);
+                    
+                    unsigned long delta_utime = utime_nuevo - lista_procesos[i].utime_anterior;
+                    unsigned long delta_stime = stime_nuevo - lista_procesos[i].stime_anterior;
+                    
+                    lista_procesos[i].porcentaje_cpu = (((delta_utime + delta_stime) / (float)hertz) / intervalo) * 100.0;
+                    
+                    lista_procesos[i].utime_anterior = utime_nuevo;
+                    lista_procesos[i].stime_anterior = stime_nuevo;
+                }
+            }
 
-            mostrar_monitor(&proceso_real, 1);
-
-            //se reprograma la alarma para el siguiente ciclo
-            alarm(intervalo_segundos);
+            mostrar_monitor(lista_procesos, total_procesos);
+            alarm(intervalo);
         }
-        
-        //en pausa la CPU hasta que llegue una señal
         pause();
     }
 
+    // Restaurar SIGINT a ser ignorado por la shell principal al salir (Solución Bug 6)
+    sa_ign.sa_handler = SIG_IGN;
+    sigemptyset(&sa_ign.sa_mask);
+    sa_ign.sa_flags = 0;
+    sigaction(SIGINT, &sa_ign, NULL);
+
+    
     //salida limpia sin matar la shell
     printf("\nSaliendo de pmon, devolviendo el control a miShell...\n");
 }
