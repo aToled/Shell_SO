@@ -1,6 +1,7 @@
 #include "jobs.h"
 #include <stdio.h>
 #include <string.h>
+#include "pmon.h"
 
 static Job jobs[max_jobs];
 static int cantidad_jobs = 0;
@@ -51,4 +52,19 @@ void avisar_jobs_terminados(void) {
             jobs[i].notificar = 0;
         }
     }
+}
+
+int extraer_jobs_para_pmon(Proceso *lista_pmon) {
+    int cont = 0;
+    for (int i = 0; i < cantidad_jobs; i++) {
+        if (jobs[i].activo) {
+            lista_pmon[cont].pid = jobs[i].pid;
+            
+            strncpy(lista_pmon[cont].comando, jobs[i].comando, 255);
+            lista_pmon[cont].comando[255] = '\0';
+            
+            cont++;
+        }
+    }
+    return cont; // Retorna exactamente cuántos procesos en background están corriendo
 }

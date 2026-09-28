@@ -5,6 +5,16 @@
 #include <unistd.h> // get pid() y sysconf
 #include <signal.h> // sigaction y sig_atomic_t
 
+const char* traducir_estado(char estado_letra) {
+    switch(estado_letra) {
+        case 'R': return "ejecutando";
+        case 'S': return "durmiendo";
+        case 'Z': return "zombie";
+        case 'T': return "detenido";
+        case 'D': return "esperando";
+        default:  return "desconocido";
+    }
+}
 
 //banderas atomicas
 volatile sig_atomic_t actualizar_pantalla = 1; //1 para imprimir inmediatamente
@@ -142,7 +152,7 @@ void mostrar_monitor(Proceso *lista_procesos, int total_procesos) {
         printf("%-10d %-20s %-10s %-15.2f %-15lu\n", 
                lista_procesos[i].pid, 
                lista_procesos[i].comando,
-               lista_procesos[i].estado, 
+               traducir_estado(lista_procesos[i].estado[0]),
                lista_procesos[i].porcentaje_cpu, 
                lista_procesos[i].memoria_rss);
                

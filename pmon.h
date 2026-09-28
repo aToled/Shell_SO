@@ -8,7 +8,7 @@
 
 typedef struct {
     int pid;
-    char comado[256];
+    char comando[256];
     char estado[3];
     unsigned long utime_anterior;
     unsigned long stime_anterior;
@@ -20,7 +20,7 @@ typedef struct {
 void mostrar_monitor(Proceso *lista_procesos, int total_procesos);
 
 // Extrae el estado y los tiempos de CPU (utime, stime) desde /proc/[pid]/stat
-void extraer_datos_stat(int pid, Proceso *p, unsigned long *utime_nuevo, unsigned long *stime_nuevo);
+int extraer_datos_stat(int pid, Proceso *p, unsigned long *utime_nuevo, unsigned long *stime_nuevo);
 
 // Extrae la memoria residente aproximada (VmRSS) desde /proc/[pid]/status
 unsigned long extraer_memoria_status(int pid);

@@ -104,7 +104,10 @@ int main(void){
                 segundos = atoi(args_comandos_internos[1]);
             }
 
-            iniciar_monitor(segundos);
+            Proceso lista_pmon[max_jobs]; 
+            int procesos_a_monitorear = extraer_jobs_para_pmon(lista_pmon); 
+            
+            iniciar_monitor(segundos, lista_pmon, procesos_a_monitorear);
             continue;
         }
 
